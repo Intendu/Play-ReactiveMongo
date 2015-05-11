@@ -1,15 +1,14 @@
+import org.specs2.matcher.MatcherMacros
 import org.specs2.mutable._
-import play.api.libs.iteratee._
-import scala.concurrent._
-import play.api.libs.json._
-import play.api.libs.json.util._
 import play.api.libs.json.Reads._
 import play.api.libs.json.Writes._
+import play.api.libs.json._
 
 object Common {
+  import reactivemongo.api._
+
   import scala.concurrent._
   import scala.concurrent.duration._
-  import reactivemongo.api._
 
   implicit val ec = ExecutionContext.Implicits.global
   /*implicit val writer = DefaultBSONHandlers.DefaultBSONDocumentWriter
@@ -35,11 +34,9 @@ case class Package(
 
 class JsonBson extends Specification {
   import Common._
-
-  import reactivemongo.bson._
-  import play.modules.reactivemongo.json.ImplicitBSONHandlers
-  import play.modules.reactivemongo.json.ImplicitBSONHandlers._
   import play.modules.reactivemongo.json.BSONFormats
+  import play.modules.reactivemongo.json.ImplicitBSONHandlers._
+  import reactivemongo.bson._
 
   sequential
   lazy val collection = db("somecollection_commonusecases")
@@ -50,6 +47,31 @@ class JsonBson extends Specification {
     20)
 
   "ReactiveMongo Plugin" should {
+    "JsNumber(int) to BSONInteger" in {
+      BSONFormats.toBSON(JsNumber(3)) must beLike { case JsSuccess(BSONInteger(value), _) => value must_== 3 }
+    }
+    "JsNumber(long) to BSONLong" in {
+      BSONFormats.toBSON(JsNumber(Long.MaxValue)) must beLike {
+        case JsSuccess(BSONLong(value), _) => value must_== Long.MaxValue
+      }
+    }
+    "JsNumber(float) to BSONDouble" in {
+      BSONFormats.toBSON(JsNumber(3.0)) must beLike { case JsSuccess(BSONDouble(value), _) => value must_== 3 }
+    }
+
+    "BSONInteger to JsNumber(int)" in {
+      BSONFormats.toJSON(BSONInteger(3)) must beLike { case JsNumber(value) => value.isValidInt must_== true }
+    }
+    "BSONLong to JsNumber(long)" in {
+      BSONFormats.toJSON(BSONLong(Long.MaxValue)) must beLike {
+        case JsNumber(value) => value.isValidLong must_== true
+      }
+    }
+    "BSONDouble to JsNumber(float)" in {
+      BSONFormats.toJSON(BSONDouble(3.3434)) must beLike {
+        case JsNumber(value) => value.ulp.isWhole must_== false
+      }
+    }
     "convert an empty json and give an empty bson doc" in {
       val json = Json.obj()
       val bson = BSONFormats.toBSON(json).get.asInstanceOf[BSONDocument]
@@ -81,7 +103,6 @@ class JsonBson extends Specification {
     }
 
     "format a jspath for mongo crud" in {
-      import play.api.libs.functional._
       import play.api.libs.functional.syntax._
       import play.modules.reactivemongo.json.Writers._
 
